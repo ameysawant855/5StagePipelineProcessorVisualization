@@ -1,0 +1,950 @@
+[
+    {
+        "id": "5ce34a80.964b54",
+        "type": "tab",
+        "label": "CSCI_504Pipeline",
+        "disabled": false,
+        "info": ""
+    },
+    {
+        "id": "18929909.50f167",
+        "type": "function",
+        "z": "5ce34a80.964b54",
+        "name": "Pipeline",
+        "func": "p = msg.payload\nflow.set(\"flowCount\", 1);\ncount = Object.keys(p).length;\ninstructionArray = [];\nmessageArray = [];\nvar length = 5; // user defined length\nmemRegArray = {F1:10,F2:20,F3:40,F4:30,F5:100,F6:2,F7:8,F8:8,F9:0,F10:0,F11:0,F12:0};\nfor( var key in memRegArray ) {\n     var value = memRegArray[key];\n     var keymsg = {payload: key};\n     keymsg.topic = key;\n     keymsg.value = value;\n     node.send(keymsg);\n}\n\nfunction createMessageObject(payload, topic) {\n  msgObject = { \"payload\":payload, \"topic\":topic};\n  return msgObject;\n}\n\nfunction decode(instruction) {\n    decodeArray = instruction.split(\" \");\n    return decodeArray;\n}\n\nfor(var i = 0; i < length; i++) {\n    messageArray.push(createMessageObject(\"\", \"stage\"+(i+1)));\n}\n\nfunction execute(instruction) {\n    instructionInfoArray = decode(instruction);\n    instructionRegisters = instructionInfoArray[1];\n    operator = instructionInfoArray[0];\n    reg = instructionRegisters.split(\",\");\n      var source1 = reg[1];\n      var source2 = reg[2];\n      var dest    = reg[0];\n    node.send(msg)\n    switch(operator) {\n        case \"ADD\":\n            result = memRegArray[source1]  + memRegArray[source2];\n            break;\n        case \"SUB\":\n            result = memRegArray[source1]  - memRegArray[source2];\n            break;\n        case \"DIV\":\n            result = memRegArray[source1]  / memRegArray[source2];\n            break;\n        case \"MUL\":\n            result = memRegArray[source1]  * memRegArray[source2];\n            break;\n        case \"MOV\": \n                 result = memRegArray[source1];\n            break;\n        case \"LD\": \n            result = source1;\n            break;\n        default:\n            break;\n    }\n    memRegArray[dest]=result;\n    writeInfo = [dest, result]\n    return writeInfo;\n}\n\nfor(counter = 1; counter <= count; counter++) {\n    key = \"i\"+counter;\n    instructionArray[counter] = p[key];\n    msg.payload = instructionArray[counter]\n    msg.topic = \"stage1\"\n    node.send(msg);\n    messageArray.splice(0, 1, createMessageObject(msg.payload, msg.topic));\n    if(counter-1!==0) {\n        instructionArray[counter] = p[key];\n        msg.payload = instructionArray[counter-1]\n        msg.topic = \"stage2\";\n        node.send(msg);\n        messageArray.splice(1, 1, createMessageObject(msg.payload, msg.topic));\n    }\n    if(counter-2!==0) {\n        instructionArray[counter] = p[key];\n        msg.payload = instructionArray[counter-2];\n        msg.topic = \"stage3\"\n        if(msg.payload) {\n            executeResults = execute(msg.payload);\n            msg.register = executeResults[0];\n            msg.value = executeResults[1];\n            msg.payload = instructionArray[counter-2];\n            msg.topic = \"stage3\"\n        }\n        node.send(msg);\n        messageArray.splice(2, 1, createMessageObject(msg.payload, msg.topic));\n    }\n    if(counter-3!==0) {\n        instructionArray[counter] = p[key];\n        msg.payload = instructionArray[counter-3]\n        msg.topic = \"stage4\"\n        node.send(msg);\n        messageArray.splice(3, 1, createMessageObject(msg.payload, msg.topic));\n    }\n    if(counter-4!==0) {\n        instructionArray[counter] = p[key];\n        msg.payload = instructionArray[counter-4]\n        msg.topic = \"stage5\"\n        node.send(msg);\n        messageArray.splice(4, 1, createMessageObject(msg.payload, msg.topic));\n    }\n}\n\nfor(c = 0; c<=4; c++){\n    for(counter = 0; counter <= 4; counter++){\n        if(messageArray[counter]) {\n            switch(messageArray[counter].topic) {\n                case \"stage1\":\n                    msg.payload = \"\";\n                    msg.topic = \"stage1\"\n                    node.send(msg);\n                    msg.payload = messageArray[counter].payload;\n                    msg.topic = \"stage2\"\n                    node.send(msg);\n                    messageArray.splice(counter, 1, createMessageObject(msg.payload, msg.topic));\n                    break;\n                case \"stage2\":\n                    if(c==1) {\n                        msg.payload = \"\";\n                        msg.topic = \"stage2\"\n                        node.send(msg);\n                    }\n                    msg.payload = messageArray[counter].payload;\n                    msg.topic = \"stage3\"\n                    if(msg.payload) {\n                        executeResults = execute(msg.payload);\n                        msg.register = executeResults[0];\n                        msg.value = executeResults[1];\n                        msg.payload = messageArray[counter].payload;\n                        msg.topic = \"stage3\"\n                    }\n                    node.send(msg);\n                    messageArray.splice(counter, 1, createMessageObject(msg.payload, msg.topic));\n                    break;\n                case \"stage3\":\n                    if(c==2) {\n                        msg.payload = \"\";\n                        msg.topic = \"stage3\"\n                        node.send(msg);\n                    }\n                    msg.payload = messageArray[counter].payload;\n                    msg.topic = \"stage4\"\n                    node.send(msg);\n                    messageArray.splice(counter, 1, createMessageObject(msg.payload, msg.topic));\n                    break;\n                case \"stage4\":\n                    if(c==3) {\n                        msg.payload = \"\";\n                        msg.topic = \"stage4\"\n                        node.send(msg);\n                    }\n                    msg.payload = messageArray[counter].payload;\n                    msg.topic = \"stage5\"\n                    node.send(msg);\n                    messageArray.splice(counter, 1, createMessageObject(msg.payload, msg.topic));\n                    break;\n                case \"stage5\":\n                    if(c==4) {\n                        msg.payload = \"\";\n                        msg.topic = \"stage5\"\n                        node.send(msg);\n                    }\n                    messageArray.splice(counter, 1, createMessageObject(msg.payload, msg.topic));\n                    break;\n            }\n        }\n    }\n}\nvar finishedmsg = {payload: \"Execution completed\"}\nfinishedmsg.topic = 'Status'\nnode.send(finishedmsg);\n\n",
+        "outputs": 1,
+        "noerr": 0,
+        "x": 240,
+        "y": 140,
+        "wires": [
+            [
+                "e25c94a3.c69088",
+                "92f109ff.c5e6b8"
+            ]
+        ]
+    },
+    {
+        "id": "c4e96e76.2ad6c",
+        "type": "ui_text",
+        "z": "5ce34a80.964b54",
+        "group": "56df33a6.297e5c",
+        "order": 1,
+        "width": 4,
+        "height": 1,
+        "name": "",
+        "label": "Stage1",
+        "format": "{{msg.payload}}",
+        "layout": "row-spread",
+        "x": 920,
+        "y": 40,
+        "wires": []
+    },
+    {
+        "id": "a1bc0afb.ed6b08",
+        "type": "ui_text",
+        "z": "5ce34a80.964b54",
+        "group": "56df33a6.297e5c",
+        "order": 2,
+        "width": 4,
+        "height": 1,
+        "name": "",
+        "label": "Stage2",
+        "format": "{{msg.payload}}",
+        "layout": "row-spread",
+        "x": 1080,
+        "y": 40,
+        "wires": []
+    },
+    {
+        "id": "904967ea.a81a58",
+        "type": "switch",
+        "z": "5ce34a80.964b54",
+        "name": "",
+        "property": "topic",
+        "propertyType": "msg",
+        "rules": [
+            {
+                "t": "eq",
+                "v": "stage1",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "stage2",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "stage3",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "stage4",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "stage5",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "Status",
+                "vt": "str"
+            }
+        ],
+        "checkall": "true",
+        "repair": false,
+        "outputs": 6,
+        "x": 630,
+        "y": 80,
+        "wires": [
+            [
+                "c4e96e76.2ad6c"
+            ],
+            [
+                "a1bc0afb.ed6b08"
+            ],
+            [
+                "3b4b392a.a386d6"
+            ],
+            [
+                "ea743a66.dd8298"
+            ],
+            [
+                "f7bc044d.0f2338"
+            ],
+            [
+                "1293a80d.c7a928"
+            ]
+        ]
+    },
+    {
+        "id": "e25c94a3.c69088",
+        "type": "delay",
+        "z": "5ce34a80.964b54",
+        "name": "",
+        "pauseType": "rate",
+        "timeout": "2",
+        "timeoutUnits": "seconds",
+        "rate": "1",
+        "nbRateUnits": "0.5",
+        "rateUnits": "second",
+        "randomFirst": "1",
+        "randomLast": "5",
+        "randomUnits": "seconds",
+        "drop": false,
+        "x": 450,
+        "y": 140,
+        "wires": [
+            [
+                "904967ea.a81a58",
+                "61ba1805.746c68"
+            ]
+        ]
+    },
+    {
+        "id": "3b4b392a.a386d6",
+        "type": "ui_text",
+        "z": "5ce34a80.964b54",
+        "group": "56df33a6.297e5c",
+        "order": 3,
+        "width": 4,
+        "height": 1,
+        "name": "",
+        "label": "Stage3",
+        "format": "{{msg.payload}}",
+        "layout": "row-spread",
+        "x": 1250,
+        "y": 40,
+        "wires": []
+    },
+    {
+        "id": "ea743a66.dd8298",
+        "type": "ui_text",
+        "z": "5ce34a80.964b54",
+        "group": "56df33a6.297e5c",
+        "order": 4,
+        "width": 4,
+        "height": 1,
+        "name": "",
+        "label": "Stage4",
+        "format": "{{msg.payload}}",
+        "layout": "row-spread",
+        "x": 1420,
+        "y": 40,
+        "wires": []
+    },
+    {
+        "id": "f7bc044d.0f2338",
+        "type": "ui_text",
+        "z": "5ce34a80.964b54",
+        "group": "56df33a6.297e5c",
+        "order": 5,
+        "width": 4,
+        "height": 1,
+        "name": "",
+        "label": "Stage5",
+        "format": "{{msg.payload}}",
+        "layout": "row-spread",
+        "x": 1600,
+        "y": 40,
+        "wires": []
+    },
+    {
+        "id": "3eb35b91.f9c684",
+        "type": "ui_text",
+        "z": "5ce34a80.964b54",
+        "group": "abc19744.501588",
+        "order": 7,
+        "width": 2,
+        "height": 1,
+        "name": "",
+        "label": "F5",
+        "format": "{{msg.value}}",
+        "layout": "row-spread",
+        "x": 710,
+        "y": 360,
+        "wires": []
+    },
+    {
+        "id": "4046eeff.8d1ea",
+        "type": "ui_text",
+        "z": "5ce34a80.964b54",
+        "group": "abc19744.501588",
+        "order": 18,
+        "width": 2,
+        "height": 1,
+        "name": "",
+        "label": "F12",
+        "format": "{{msg.value}}",
+        "layout": "row-spread",
+        "x": 830,
+        "y": 200,
+        "wires": []
+    },
+    {
+        "id": "2a7218a9.e4b338",
+        "type": "ui_text",
+        "z": "5ce34a80.964b54",
+        "group": "abc19744.501588",
+        "order": 1,
+        "width": 2,
+        "height": 1,
+        "name": "",
+        "label": "F1",
+        "format": "{{msg.value}}",
+        "layout": "row-spread",
+        "x": 710,
+        "y": 200,
+        "wires": []
+    },
+    {
+        "id": "96a0b1f9.9244c",
+        "type": "ui_text",
+        "z": "5ce34a80.964b54",
+        "group": "abc19744.501588",
+        "order": 4,
+        "width": 2,
+        "height": 1,
+        "name": "",
+        "label": "F3",
+        "format": "{{msg.value}}",
+        "layout": "row-spread",
+        "x": 710,
+        "y": 280,
+        "wires": []
+    },
+    {
+        "id": "baaa860d.363798",
+        "type": "ui_text",
+        "z": "5ce34a80.964b54",
+        "group": "abc19744.501588",
+        "order": 16,
+        "width": 2,
+        "height": 1,
+        "name": "",
+        "label": "F11",
+        "format": "{{msg.value}}",
+        "layout": "row-spread",
+        "x": 830,
+        "y": 240,
+        "wires": []
+    },
+    {
+        "id": "b8b48529.c49558",
+        "type": "ui_text",
+        "z": "5ce34a80.964b54",
+        "group": "abc19744.501588",
+        "order": 10,
+        "width": 2,
+        "height": 1,
+        "name": "",
+        "label": "F7",
+        "format": "{{msg.value}}",
+        "layout": "row-spread",
+        "x": 830,
+        "y": 400,
+        "wires": []
+    },
+    {
+        "id": "3565c66f.c2230a",
+        "type": "ui_text",
+        "z": "5ce34a80.964b54",
+        "group": "abc19744.501588",
+        "order": 3,
+        "width": 2,
+        "height": 1,
+        "name": "",
+        "label": "F2",
+        "format": "{{msg.value}}",
+        "layout": "row-spread",
+        "x": 710,
+        "y": 240,
+        "wires": []
+    },
+    {
+        "id": "3e9e7567.60430a",
+        "type": "ui_text",
+        "z": "5ce34a80.964b54",
+        "group": "abc19744.501588",
+        "order": 9,
+        "width": 2,
+        "height": 1,
+        "name": "",
+        "label": "F6",
+        "format": "{{msg.value}}",
+        "layout": "row-spread",
+        "x": 710,
+        "y": 400,
+        "wires": []
+    },
+    {
+        "id": "3565727e.08238e",
+        "type": "ui_text",
+        "z": "5ce34a80.964b54",
+        "group": "abc19744.501588",
+        "order": 12,
+        "width": 2,
+        "height": 1,
+        "name": "",
+        "label": "F8",
+        "format": "{{msg.value}}",
+        "layout": "row-spread",
+        "x": 830,
+        "y": 360,
+        "wires": []
+    },
+    {
+        "id": "170ea23a.d432fe",
+        "type": "ui_text",
+        "z": "5ce34a80.964b54",
+        "group": "abc19744.501588",
+        "order": 6,
+        "width": 2,
+        "height": 1,
+        "name": "",
+        "label": "F4",
+        "format": "{{msg.value}}",
+        "layout": "row-spread",
+        "x": 710,
+        "y": 320,
+        "wires": []
+    },
+    {
+        "id": "fe8ec5b.f671638",
+        "type": "ui_text",
+        "z": "5ce34a80.964b54",
+        "group": "abc19744.501588",
+        "order": 13,
+        "width": 2,
+        "height": 1,
+        "name": "",
+        "label": "F9",
+        "format": "{{msg.value}}",
+        "layout": "row-spread",
+        "x": 830,
+        "y": 320,
+        "wires": []
+    },
+    {
+        "id": "6c39d6ea.52f018",
+        "type": "ui_text",
+        "z": "5ce34a80.964b54",
+        "group": "abc19744.501588",
+        "order": 15,
+        "width": 2,
+        "height": 1,
+        "name": "",
+        "label": "F10",
+        "format": "{{msg.value}}",
+        "layout": "row-spread",
+        "x": 830,
+        "y": 280,
+        "wires": []
+    },
+    {
+        "id": "61ba1805.746c68",
+        "type": "switch",
+        "z": "5ce34a80.964b54",
+        "name": "",
+        "property": "register",
+        "propertyType": "msg",
+        "rules": [
+            {
+                "t": "eq",
+                "v": "F1",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "F2",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "F3",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "F4",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "F5",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "F6",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "F7",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "F8",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "F9",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "F10",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "F11",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "F12",
+                "vt": "str"
+            }
+        ],
+        "checkall": "true",
+        "repair": false,
+        "outputs": 12,
+        "x": 520,
+        "y": 260,
+        "wires": [
+            [
+                "2a7218a9.e4b338"
+            ],
+            [
+                "3565c66f.c2230a"
+            ],
+            [
+                "96a0b1f9.9244c"
+            ],
+            [
+                "170ea23a.d432fe"
+            ],
+            [
+                "3eb35b91.f9c684"
+            ],
+            [
+                "3e9e7567.60430a"
+            ],
+            [
+                "b8b48529.c49558"
+            ],
+            [
+                "3565727e.08238e"
+            ],
+            [
+                "fe8ec5b.f671638"
+            ],
+            [
+                "6c39d6ea.52f018"
+            ],
+            [
+                "baaa860d.363798"
+            ],
+            [
+                "4046eeff.8d1ea"
+            ]
+        ]
+    },
+    {
+        "id": "6c41b46b.81493c",
+        "type": "ui_button",
+        "z": "5ce34a80.964b54",
+        "name": "",
+        "group": "ad88c919.c81528",
+        "order": 1,
+        "width": 5,
+        "height": 1,
+        "passthru": true,
+        "label": "Click here to Start",
+        "tooltip": "",
+        "color": "White",
+        "bgcolor": "Green",
+        "icon": "",
+        "payload": "{\"i1\":\"ADD F9,F1,F2\",\"i2\":\"SUB F10,F3,F4\",\"i3\":\"DIV F11,F5,F6\",\"i4\":\"MUL F12,F7,F8\",\"i5\":\"MOV F1,F9\",\"i6\":\"LD F12,10\"}",
+        "payloadType": "json",
+        "topic": "",
+        "x": 130,
+        "y": 40,
+        "wires": [
+            [
+                "18929909.50f167",
+                "6959f532.426bcc",
+                "c3c59612.7e6578"
+            ]
+        ]
+    },
+    {
+        "id": "92f109ff.c5e6b8",
+        "type": "switch",
+        "z": "5ce34a80.964b54",
+        "name": "RegisterValues",
+        "property": "topic",
+        "propertyType": "msg",
+        "rules": [
+            {
+                "t": "eq",
+                "v": "F1",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "F2",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "F3",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "F4",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "F5",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "F6",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "F7",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "F8",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "F9",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "F10",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "F11",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "F12",
+                "vt": "str"
+            }
+        ],
+        "checkall": "true",
+        "repair": false,
+        "outputs": 12,
+        "x": 430,
+        "y": 480,
+        "wires": [
+            [
+                "2a7218a9.e4b338"
+            ],
+            [
+                "3565c66f.c2230a"
+            ],
+            [
+                "96a0b1f9.9244c"
+            ],
+            [
+                "170ea23a.d432fe"
+            ],
+            [
+                "3eb35b91.f9c684"
+            ],
+            [
+                "3e9e7567.60430a"
+            ],
+            [
+                "b8b48529.c49558"
+            ],
+            [
+                "3565727e.08238e"
+            ],
+            [
+                "fe8ec5b.f671638"
+            ],
+            [
+                "6c39d6ea.52f018"
+            ],
+            [
+                "baaa860d.363798"
+            ],
+            [
+                "4046eeff.8d1ea"
+            ]
+        ]
+    },
+    {
+        "id": "1293a80d.c7a928",
+        "type": "ui_toast",
+        "z": "5ce34a80.964b54",
+        "position": "top right",
+        "displayTime": "2",
+        "highlight": "",
+        "sendall": false,
+        "outputs": 0,
+        "ok": "OK",
+        "cancel": "",
+        "raw": false,
+        "topic": "",
+        "name": "Status",
+        "x": 930,
+        "y": 140,
+        "wires": []
+    },
+    {
+        "id": "6959f532.426bcc",
+        "type": "function",
+        "z": "5ce34a80.964b54",
+        "name": "InstructionBuffer",
+        "func": "p = msg.payload\nflow.set(\"flowCount\", 1);\ncount = Object.keys(p).length;\ninstructionArray = [];\nfor(counter = 1; counter <= count; counter++) {\n    key = \"i\"+counter;\n    instructionArray[counter] = p[key];\n    msg.payload = instructionArray[counter];\n    msg.topic = counter;\n    node.send(msg);\n}",
+        "outputs": 1,
+        "noerr": 0,
+        "x": 700,
+        "y": 480,
+        "wires": [
+            [
+                "8606d863.fef8a8"
+            ]
+        ]
+    },
+    {
+        "id": "cfdb9353.55c81",
+        "type": "ui_text",
+        "z": "5ce34a80.964b54",
+        "group": "df1d51b8.b23df",
+        "order": 1,
+        "width": 6,
+        "height": 1,
+        "name": "",
+        "label": "Instruction1",
+        "format": "{{msg.payload}}",
+        "layout": "row-left",
+        "x": 1090,
+        "y": 240,
+        "wires": []
+    },
+    {
+        "id": "60fd921b.bfd58c",
+        "type": "ui_text",
+        "z": "5ce34a80.964b54",
+        "group": "df1d51b8.b23df",
+        "order": 2,
+        "width": 6,
+        "height": 1,
+        "name": "",
+        "label": "Instruction2",
+        "format": "{{msg.payload}}",
+        "layout": "row-left",
+        "x": 1090,
+        "y": 280,
+        "wires": []
+    },
+    {
+        "id": "d3f5ff0.544d3",
+        "type": "ui_text",
+        "z": "5ce34a80.964b54",
+        "group": "df1d51b8.b23df",
+        "order": 3,
+        "width": 6,
+        "height": 1,
+        "name": "",
+        "label": "Instruction3",
+        "format": "{{msg.payload}}",
+        "layout": "row-left",
+        "x": 1090,
+        "y": 320,
+        "wires": []
+    },
+    {
+        "id": "9859e21e.90a73",
+        "type": "ui_text",
+        "z": "5ce34a80.964b54",
+        "group": "df1d51b8.b23df",
+        "order": 4,
+        "width": 6,
+        "height": 1,
+        "name": "",
+        "label": "Instruction4",
+        "format": "{{msg.payload}}",
+        "layout": "row-left",
+        "x": 1090,
+        "y": 360,
+        "wires": []
+    },
+    {
+        "id": "5cdfde2.37bf92",
+        "type": "ui_text",
+        "z": "5ce34a80.964b54",
+        "group": "df1d51b8.b23df",
+        "order": 5,
+        "width": 6,
+        "height": 1,
+        "name": "",
+        "label": "Instruction5",
+        "format": "{{msg.payload}}",
+        "layout": "row-left",
+        "x": 1090,
+        "y": 400,
+        "wires": []
+    },
+    {
+        "id": "ff5ba2ee.d862c",
+        "type": "ui_text",
+        "z": "5ce34a80.964b54",
+        "group": "df1d51b8.b23df",
+        "order": 6,
+        "width": 6,
+        "height": 1,
+        "name": "",
+        "label": "Instruction6",
+        "format": "{{msg.payload}}",
+        "layout": "row-left",
+        "x": 1090,
+        "y": 440,
+        "wires": []
+    },
+    {
+        "id": "fd280704.c24dc8",
+        "type": "switch",
+        "z": "5ce34a80.964b54",
+        "name": "",
+        "property": "topic",
+        "propertyType": "msg",
+        "rules": [
+            {
+                "t": "eq",
+                "v": "1",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "2",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "3",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "4",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "5",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "6",
+                "vt": "str"
+            }
+        ],
+        "checkall": "true",
+        "repair": false,
+        "outputs": 6,
+        "x": 910,
+        "y": 500,
+        "wires": [
+            [
+                "cfdb9353.55c81"
+            ],
+            [
+                "60fd921b.bfd58c"
+            ],
+            [
+                "d3f5ff0.544d3"
+            ],
+            [
+                "9859e21e.90a73"
+            ],
+            [
+                "5cdfde2.37bf92"
+            ],
+            [
+                "ff5ba2ee.d862c"
+            ]
+        ]
+    },
+    {
+        "id": "8606d863.fef8a8",
+        "type": "delay",
+        "z": "5ce34a80.964b54",
+        "name": "",
+        "pauseType": "rate",
+        "timeout": "5",
+        "timeoutUnits": "seconds",
+        "rate": "1",
+        "nbRateUnits": "0.5",
+        "rateUnits": "second",
+        "randomFirst": "1",
+        "randomLast": "5",
+        "randomUnits": "seconds",
+        "drop": false,
+        "x": 770,
+        "y": 580,
+        "wires": [
+            [
+                "fd280704.c24dc8"
+            ]
+        ]
+    },
+    {
+        "id": "f7866a5f.a06158",
+        "type": "ui_text",
+        "z": "5ce34a80.964b54",
+        "group": "ad88c919.c81528",
+        "order": 2,
+        "width": 0,
+        "height": 0,
+        "name": "",
+        "label": "",
+        "format": "{{msg.payload}}",
+        "layout": "row-spread",
+        "x": 230,
+        "y": 420,
+        "wires": []
+    },
+    {
+        "id": "c3c59612.7e6578",
+        "type": "trigger",
+        "z": "5ce34a80.964b54",
+        "op1": "Initializing..",
+        "op2": " ",
+        "op1type": "str",
+        "op2type": "str",
+        "duration": "5",
+        "extend": false,
+        "units": "s",
+        "reset": "reset",
+        "bytopic": "all",
+        "name": "",
+        "x": 160,
+        "y": 280,
+        "wires": [
+            [
+                "f7866a5f.a06158"
+            ]
+        ]
+    },
+    {
+        "id": "56df33a6.297e5c",
+        "type": "ui_group",
+        "z": "5ce34a80.964b54",
+        "name": "Pipeline",
+        "tab": "7a2a7d0e.ef2414",
+        "order": 1,
+        "disp": true,
+        "width": "20",
+        "collapse": false
+    },
+    {
+        "id": "abc19744.501588",
+        "type": "ui_group",
+        "z": "",
+        "name": "Registers",
+        "tab": "7a2a7d0e.ef2414",
+        "order": 3,
+        "disp": true,
+        "width": 5,
+        "collapse": false
+    },
+    {
+        "id": "ad88c919.c81528",
+        "type": "ui_group",
+        "z": "",
+        "name": "Start",
+        "tab": "7a2a7d0e.ef2414",
+        "order": 2,
+        "disp": true,
+        "width": 5,
+        "collapse": false
+    },
+    {
+        "id": "df1d51b8.b23df",
+        "type": "ui_group",
+        "z": "",
+        "name": "Instructions",
+        "tab": "7a2a7d0e.ef2414",
+        "order": 4,
+        "disp": true,
+        "width": "6",
+        "collapse": false
+    },
+    {
+        "id": "7a2a7d0e.ef2414",
+        "type": "ui_tab",
+        "z": "",
+        "name": "Home",
+        "icon": "dashboard",
+        "disabled": false,
+        "hidden": false
+    }
+]
